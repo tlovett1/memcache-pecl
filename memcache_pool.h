@@ -42,16 +42,9 @@
 #include <string.h>
 
 #include "php.h"
-#include "ext/standard/php_smart_str_public.h"
+#include "ext/standard/php_smart_string.h"
 #include "memcache_queue.h"
 
-#ifndef ZSTR
-#define ZSTR
-#define ZSTR_VAL(v) v
-#define zstr char *
-#else
-#define ZSTR_VAL(v) (v).s
-#endif
 
 /*
  * Mac OS X has no MSG_NOSIGNAL but >= 10.2 comes with SO_NOSIGPIPE which is a setsockopt() option
