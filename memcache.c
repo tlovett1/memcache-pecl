@@ -706,7 +706,7 @@ mmc_t *mmc_find_persistent(const char *host, int host_len, unsigned short port, 
 
 	key_len = spprintf(&key, 0, "memcache:server:%s:%u:%u", host, port, udp_port);
 
-	if (zend_hash_find(&EG(persistent_list), key, key_len+1, (void **)&le) == FAILURE) {
+	if (zend_hash_find(&EG(persistent_list), Z_STR_P(key)) == NULL) {
 		zend_resource new_le;
 
 		mmc = mmc_server_new(host, host_len, port, udp_port, 1, timeout, retry_interval TSRMLS_CC);
@@ -780,7 +780,7 @@ static mmc_t *php_mmc_pool_addserver(
 	}
 
 	/* initialize pool if need be */
-	if (zend_hash_find(Z_OBJPROP_P(mmc_object), "connection", sizeof("connection"), (void **)&connection) == FAILURE) {
+	if (zend_hash_find(Z_OBJPROP_P(mmc_object), zend_string_init("connection", sizeof("connection")-1, 0)) == NULL) {
 		pool = mmc_pool_new(TSRMLS_C);
 		pool->failure_callback = &php_mmc_failure_callback;
 #if (PHP_MAJOR_VERSION == 5 && PHP_MINOR_VERSION == 3)
@@ -1001,7 +1001,7 @@ static void php_mmc_failure_callback(mmc_pool_t *pool, mmc_t *mmc, void *param T
 	zval **callback;
 
 	/* check for userspace callback */
-	if (param != NULL && zend_hash_find(Z_OBJPROP_P((zval *)param), "_failureCallback", sizeof("_failureCallback"), (void **)&callback) == SUCCESS && Z_TYPE_PP(callback) != IS_NULL) {
+	if (param != NULL && zend_hash_find(Z_OBJPROP_P((zval *)param), zend_string_init("_failureCallback", sizeof("_failureCallback")-1, 0)) != NULL && Z_TYPE_PP(callback) != IS_NULL) {
 		if (zend_is_callable(*callback, 0, NULL)) {
 			zval *retval = NULL;
 			zval *host, *tcp_port, *udp_port, *error, *errnum;
