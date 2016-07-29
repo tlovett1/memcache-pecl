@@ -364,10 +364,10 @@ static void _mmc_server_list_dtor(zend_resource *rsrc TSRMLS_DC) /* {{{ */
 
 static int mmc_get_pool(zval *id, mmc_pool_t **pool TSRMLS_DC) /* {{{ */
 {
-	zval **connection;
+	zval *connection;
 	int resource_type;
 
-	if (Z_TYPE_P(id) != IS_OBJECT || zend_hash_find(Z_OBJPROP_P(id), "connection", sizeof("connection"), (void **)&connection) == FAILURE) {
+	if (Z_TYPE_P(id) != IS_OBJECT || zend_hash_find(Z_OBJPROP_P(id), zend_string_init("connection", sizeof("connection")-1, 0)) == NULL) {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "No servers added to memcache connection");
 		return 0;
 	}
