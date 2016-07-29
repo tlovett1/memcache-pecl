@@ -29,10 +29,6 @@
 #include "ext/standard/php_string.h"
 #include "php_memcache.h"
 
-#ifndef ZEND_ENGINE_2
-#define OnUpdateLong OnUpdateInt
-#endif
-
 /* True global resources - no need for thread safety here */
 static int le_memcache_pool, le_memcache_server;
 static zend_class_entry *memcache_pool_ce;
@@ -138,7 +134,7 @@ static PHP_INI_MH(OnUpdateChunkSize) /* {{{ */
 		return FAILURE;
 	}
 
-	return OnUpdateLong(entry, new_value, ZSTR_LEN(new_value), mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
+	return OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
 }
 /* }}} */
 
@@ -152,7 +148,7 @@ static PHP_INI_MH(OnUpdateFailoverAttempts) /* {{{ */
 		return FAILURE;
 	}
 
-	return OnUpdateLong(entry, new_value, ZSTR_LEN(new_value), mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
+	return OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
 }
 /* }}} */
 
@@ -217,7 +213,7 @@ static PHP_INI_MH(OnUpdateRedundancy) /* {{{ */
 		return FAILURE;
 	}
 
-	return OnUpdateLong(entry, new_value, ZSTR_LEN(new_value), mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
+	return OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
 }
 /* }}} */
 
@@ -231,7 +227,7 @@ static PHP_INI_MH(OnUpdateCompressThreshold) /* {{{ */
 		return FAILURE;
 	}
 
-	return OnUpdateLong(entry, new_value, ZSTR_LEN(new_value), mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
+	return OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
 }
 /* }}} */
 
@@ -245,7 +241,7 @@ static PHP_INI_MH(OnUpdateLockTimeout) /* {{{ */
 		return FAILURE;
 	}
 
-	return OnUpdateLong(entry, new_value, ZSTR_VAL(new_value), mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
+	return OnUpdateLong(entry, new_value, mh_arg1, mh_arg2, mh_arg3, stage TSRMLS_CC);
 }
 /* }}} */
 
@@ -266,8 +262,8 @@ PHP_INI_END()
 /* }}} */
 
 /* {{{ internal function protos */
-static void _mmc_pool_list_dtor(zend_rsrc_list_entry * TSRMLS_DC);
-static void _mmc_server_list_dtor(zend_rsrc_list_entry * TSRMLS_DC);
+static void _mmc_pool_list_dtor(zend_resource * TSRMLS_DC);
+static void _mmc_server_list_dtor(zend_resource * TSRMLS_DC);
 static void php_mmc_set_failure_callback(mmc_pool_t *, zval *, zval * TSRMLS_DC);
 static void php_mmc_failure_callback(mmc_pool_t *, mmc_t *, void * TSRMLS_DC);
 /* }}} */
@@ -291,7 +287,7 @@ PHP_MINIT_FUNCTION(memcache)
 	memcache_pool_ce = zend_register_internal_class(&ce TSRMLS_CC);
 
 	INIT_CLASS_ENTRY(ce, "Memcache", php_memcache_class_functions);
-	memcache_ce = zend_register_internal_class_ex(&ce, memcache_pool_ce, NULL TSRMLS_CC);
+	memcache_ce = zend_register_internal_class_ex(&ce, memcache_pool_ce);
 
 	le_memcache_pool = zend_register_list_destructors_ex(_mmc_pool_list_dtor, NULL, "memcache connection", module_number);
 	le_memcache_server = zend_register_list_destructors_ex(NULL, _mmc_server_list_dtor, "persistent memcache connection", module_number);
@@ -347,12 +343,12 @@ PHP_MINFO_FUNCTION(memcache)
    internal functions
    ------------------ */
 
-static void _mmc_pool_list_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) /* {{{ */
+static void _mmc_pool_list_dtor(zend_resource *rsrc TSRMLS_DC) /* {{{ */
 {
 	mmc_pool_t *pool = (mmc_pool_t *)rsrc->ptr;
 
 	if (pool->failure_callback_param) {
-		zval_ptr_dtor((zval **)&pool->failure_callback_param);
+		zval_ptr_dtor((zval *)&pool->failure_callback_param);
 		pool->failure_callback_param = NULL;
 	}
 
@@ -360,7 +356,7 @@ static void _mmc_pool_list_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) /* {{{ */
 }
 /* }}} */
 
-static void _mmc_server_list_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) /* {{{ */
+static void _mmc_server_list_dtor(zend_resource *rsrc TSRMLS_DC) /* {{{ */
 {
 	mmc_server_free((mmc_t *)rsrc->ptr TSRMLS_CC);
 }
@@ -704,21 +700,21 @@ static void php_mmc_numeric(INTERNAL_FUNCTION_PARAMETERS, int deleted, int inver
 mmc_t *mmc_find_persistent(const char *host, int host_len, unsigned short port, unsigned short udp_port, double timeout, int retry_interval TSRMLS_DC) /* {{{ */
 {
 	mmc_t *mmc;
-	zend_rsrc_list_entry *le;
+	zend_resource *le;
 	char *key;
 	int key_len;
 
 	key_len = spprintf(&key, 0, "memcache:server:%s:%u:%u", host, port, udp_port);
 
 	if (zend_hash_find(&EG(persistent_list), key, key_len+1, (void **)&le) == FAILURE) {
-		zend_rsrc_list_entry new_le;
+		zend_resource new_le;
 
 		mmc = mmc_server_new(host, host_len, port, udp_port, 1, timeout, retry_interval TSRMLS_CC);
 		new_le.type = le_memcache_server;
 		new_le.ptr  = mmc;
 
 		/* register new persistent connection */
-		if (zend_hash_update(&EG(persistent_list), key, key_len+1, (void *)&new_le, sizeof(zend_rsrc_list_entry), NULL) == FAILURE) {
+		if (zend_hash_update(&EG(persistent_list), key, key_len+1, (void *)&new_le, sizeof(zend_resource), NULL) == FAILURE) {
 			mmc_server_free(mmc TSRMLS_CC);
 			mmc = NULL;
 		} else {
@@ -730,7 +726,7 @@ mmc_t *mmc_find_persistent(const char *host, int host_len, unsigned short port, 
 		}
 	}
 	else if (le->type != le_memcache_server || le->ptr == NULL) {
-		zend_rsrc_list_entry new_le;
+		zend_resource new_le;
 		zend_hash_del(&EG(persistent_list), key, key_len+1);
 
 		mmc = mmc_server_new(host, host_len, port, udp_port, 1, timeout, retry_interval TSRMLS_CC);
@@ -738,7 +734,7 @@ mmc_t *mmc_find_persistent(const char *host, int host_len, unsigned short port, 
 		new_le.ptr  = mmc;
 
 		/* register new persistent connection */
-		if (zend_hash_update(&EG(persistent_list), key, key_len+1, (void *)&new_le, sizeof(zend_rsrc_list_entry), NULL) == FAILURE) {
+		if (zend_hash_update(&EG(persistent_list), key, key_len+1, (void *)&new_le, sizeof(zend_resource), NULL) == FAILURE) {
 			mmc_server_free(mmc TSRMLS_CC);
 			mmc = NULL;
 		}
