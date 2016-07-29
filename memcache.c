@@ -372,7 +372,7 @@ static int mmc_get_pool(zval *id, mmc_pool_t **pool TSRMLS_DC) /* {{{ */
 		return 0;
 	}
 
-	*pool = (mmc_pool_t *) zend_list_find(Z_LVAL_PP(connection), &resource_type);
+	*pool = (mmc_pool_t *) Z_RES_P(connection)->ptr;
 	if (!*pool || resource_type != le_memcache_pool) {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Invalid MemcachePool->connection member variable");
 		return 0;
