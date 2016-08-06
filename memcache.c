@@ -438,18 +438,20 @@ static void php_mmc_store(INTERNAL_FUNCTION_PARAMETERS, int op) /* {{{ */
 	RETVAL_NULL();
 
 	if (Z_TYPE_P(keys) == IS_ARRAY) {
-		zstr key;
+		zend_string *key;
 		char keytmp[MAX_LENGTH_OF_LONG + 1];
 		unsigned int key_len;
 		unsigned long index;
 		int key_type;
+		ulong num_key;
 
-		zval **arrval;
+		zval *arrval;
 		HashPosition pos;
 		zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(keys), &pos);
 
-		while (zend_hash_get_current_data_ex(Z_ARRVAL_P(keys), (void **)&arrval, &pos) == SUCCESS) {
-			key_type = zend_hash_get_current_key_ex(Z_ARRVAL_P(keys), &key, &key_len, &index, 0, &pos);
+		//while (zend_hash_get_current_data_ex(Z_ARRVAL_P(keys), (void *)&arrval, &pos) == SUCCESS) {
+		ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(keys), num_key, key, arrval) {
+			key_type = zend_hash_get_current_key_ex(Z_ARRVAL_P(keys), &key, &index, &pos);
 			zend_hash_move_forward_ex(Z_ARRVAL_P(keys), &pos);
 
 			switch (key_type) {
@@ -459,7 +461,7 @@ static void php_mmc_store(INTERNAL_FUNCTION_PARAMETERS, int op) /* {{{ */
 
 				case HASH_KEY_IS_LONG:
 					key_len = sprintf(keytmp, "%lu", index);
-					key = ZSTR(keytmp);
+					key = zend_string_init(keytmp, key_len, 0);
 					break;
 
 				default:
@@ -478,7 +480,7 @@ static void php_mmc_store(INTERNAL_FUNCTION_PARAMETERS, int op) /* {{{ */
 			}
 
 			/* assemble command */
-			if (pool->protocol->store(pool, request, op, request->key, request->key_len, flags, exptime, cas, *arrval TSRMLS_CC) != MMC_OK) {
+			if (pool->protocol->store(pool, request, op, request->key, request->key_len, flags, exptime, cas, arrval TSRMLS_CC) != MMC_OK) {
 				mmc_pool_release(pool, request);
 				continue;
 			}
@@ -490,7 +492,7 @@ static void php_mmc_store(INTERNAL_FUNCTION_PARAMETERS, int op) /* {{{ */
 
 			/* begin sending requests immediatly */
 			mmc_pool_select(pool TSRMLS_CC);
-		}
+		} ZEND_HASH_FOREACH_END();
 	}
 	else if (value) {
 		/* allocate request */
@@ -1633,7 +1635,8 @@ PHP_FUNCTION(memcache_get)
 	value_handler_param[2] = cas;
 
 	if (Z_TYPE_P(keys) == IS_ARRAY) {
-		zval **key;
+		zval *key, *val;
+		ulong num_key;
 		HashPosition pos;
 
 		/* return empty array if no keys found */
@@ -1643,7 +1646,8 @@ PHP_FUNCTION(memcache_get)
 		failover_handler_param[1] = value_handler_param;
 
 		zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(keys), &pos);
-		while (zend_hash_get_current_data_ex(Z_ARRVAL_P(keys), (void **)&key, &pos) == SUCCESS) {
+		//while (zend_hash_get_current_data_ex(Z_ARRVAL_P(keys), (void **)&key, &pos) == SUCCESS) {
+		ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(keys), num_key, key, val) {
 			zend_hash_move_forward_ex(Z_ARRVAL_P(keys), &pos);
 
 			/* schedule request */
@@ -1651,7 +1655,7 @@ PHP_FUNCTION(memcache_get)
 				cas != NULL ? MMC_OP_GETS : MMC_OP_GET, *key,
 				mmc_value_handler_multi, value_handler_param,
 				mmc_value_failover_handler, failover_handler_param, NULL TSRMLS_CC);
-		}
+		} ZEND_HASH_FOREACH_END();
 	}
 	else {
 		mmc_request_t *request;
